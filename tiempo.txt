@@ -1,0 +1,3 @@
+Intervalo: 3
+Inicio: 09:00
+Termino: 23:59
