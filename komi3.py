@@ -5,10 +5,11 @@ from discord import app_commands
 import asyncio
 import random
 from datetime import datetime
-import threading  # esto es nuevo, para escuchar la consola en un hilo separado con el comando !
+import threading  # Para escuchar la consola en un hilo separado con el comando !
 
 # Ruta principal del directorio, donde está todo
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+IMAGES_DIR = os.path.join(BASE_DIR, "imagenes")  # Ruta de la carpeta "imagenes"
 
 # Cargar frases desde el archivo frases
 def load_phrases():
@@ -121,9 +122,7 @@ async def send_random_messages():
                 for channel in guild.text_channels:
                     if channel.permissions_for(guild.me).send_messages:
                         message = bot.get_next_message()  # Obtener el siguiente mensaje
-                        await channel.send(message)
-                        # Log en la consola
-                        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Mensaje enviado: '{message}' en el servidor '{guild.name}' en el canal '{channel.name}'")
+                        await send_message_or_image(channel, message)  # Enviar texto o imagen
                         break  # Enviar a un solo canal por servidor
         else:
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Fuera del horario de envío ({start_time} - {end_time}).")
@@ -131,23 +130,48 @@ async def send_random_messages():
         # Esperar el intervalo definido
         await asyncio.sleep(interval * 60)
 
-# Hilo para escuchar la consola y enviar mensajes personalizados
+# Enviar un mensaje o una imagen
+async def send_message_or_image(channel, content):
+    """Enviar un mensaje o una imagen según el contenido"""
+    image_path = os.path.join(IMAGES_DIR, content)  # Ruta completa de la posible imagen
+    if os.path.isfile(image_path):  # Verificar si es una imagen válida
+        try:
+            await channel.send(file=discord.File(image_path))  # Enviar como archivo adjunto
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Imagen enviada: '{content}' en el canal '{channel.name}'")
+        except Exception as e:
+            print(f"Error al enviar la imagen '{content}': {e}")
+    else:
+        # Enviar como mensaje de texto
+        await channel.send(content)
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Mensaje enviado: '{content}' en el canal '{channel.name}'")
+
+# Hilo para escuchar la consola y enviar mensajes personalizados o imágenes
 def console_listener():
     while True:
         user_input = input()  # Leer entrada del usuario
         if user_input.startswith("!"):  # Detectar mensajes con prefijo '!'
-            message = user_input[1:]  # Obtener el mensaje después de '!'
+            content = user_input[1:]  # Obtener el mensaje después de '!'
             # Enviar la tarea al event loop principal del bot
-            asyncio.run_coroutine_threadsafe(send_custom_message(message), bot.loop)
+            asyncio.run_coroutine_threadsafe(send_custom_content(content), bot.loop)
 
-# Función para enviar mensajes personalizados
-async def send_custom_message(message):
+# Función para enviar contenido personalizado (texto o imágenes)
+async def send_custom_content(content):
+    """Enviar un mensaje de texto o una imagen desde la consola"""
+    image_path = os.path.join(IMAGES_DIR, content)  # Ruta completa de la posible imagen
     for guild in bot.guilds:
         for channel in guild.text_channels:
             if channel.permissions_for(guild.me).send_messages:
-                await channel.send(message)
-                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Mensaje personalizado enviado: '{message}' en el servidor '{guild.name}' en el canal '{channel.name}'")
-                return  # Solo enviar a un canal por servidor
+                if os.path.isfile(image_path):  # Si la ruta corresponde a una imagen válida
+                    try:
+                        await channel.send(file=discord.File(image_path))  # Enviar la imagen
+                        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Imagen enviada: '{content}' en el servidor '{guild.name}' en el canal '{channel.name}'")
+                    except Exception as e:
+                        print(f"Error al enviar la imagen '{content}': {e}")
+                else:
+                    # Si no es una imagen, enviar como texto
+                    await channel.send(content)
+                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Mensaje enviado: '{content}' en el servidor '{guild.name}' en el canal '{channel.name}'")
+                return  # Enviar solo al primer canal permitido por servidor
 
 # Evento al estar listo el bot
 @bot.event
